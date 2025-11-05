@@ -1,95 +1,115 @@
 import React, { useState } from 'react';
 import { Form, Button, Alert, Card, FloatingLabel, Row, Col } from 'react-bootstrap';
 import { createAccount, inquireAccount, deposit, withdraw, closeAccount } from '../services/customerApi';
+import { isValidAccountNumber, isValidAmount, sanitizeString, isRequired } from '../utils/validation';
+import { getErrorMessage } from '../utils/errorHandler';
+import { ERROR_MESSAGES, ACCOUNT_TYPES, DEFAULTS } from '../constants';
 
 function Account() {
-  const [createForm, setCreateForm] = useState({ customerId: '', type: 'SAVINGS' });
+  const [createForm, setCreateForm] = useState({ customerId: '', type: DEFAULTS.ACCOUNT_TYPE });
   const [number, setNumber] = useState('');
-  const [amount, setAmount] = useState('');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [closeNumber, setCloseNumber] = useState('');
-  const [validated, setValidated] = useState({ create: false, inquire: false, amount: false, close: false });
+  const [validated, setValidated] = useState({ create: false, inquire: false, deposit: false, withdraw: false, close: false });
+  const [loading, setLoading] = useState({ create: false, inquire: false, deposit: false, withdraw: false, close: false });
 
   const onCreate = async (e) => {
     e.preventDefault();
     setValidated((v) => ({ ...v, create: true }));
-    const idTrimmed = String(createForm.customerId || '').trim();
-    const typeTrimmed = String(createForm.type || '').trim();
-    if (!idTrimmed || !typeTrimmed) {
+    const idTrimmed = sanitizeString(createForm.customerId);
+    const typeTrimmed = sanitizeString(createForm.type);
+    if (!isRequired(idTrimmed) || !isRequired(typeTrimmed)) {
       setError('Provide Customer ID and Account Type');
       setResult(null);
       return;
     }
     try {
+      setLoading((l) => ({ ...l, create: true }));
+      setError(null);
       const { data } = await createAccount({ customerId: idTrimmed, type: createForm.type });
       setResult(data);
-      setError(null);
+      setCreateForm({ customerId: '', type: DEFAULTS.ACCOUNT_TYPE });
+      setValidated((v) => ({ ...v, create: false }));
     } catch (err) {
-      setError(err.response?.data || 'Error creating account');
+      setError(getErrorMessage(err) || ERROR_MESSAGES.CREATE_ACCOUNT_ERROR);
       setResult(null);
+    } finally {
+      setLoading((l) => ({ ...l, create: false }));
     }
   };
 
   const onInquire = async (e) => {
     e.preventDefault();
     setValidated((v) => ({ ...v, inquire: true }));
-    const numTrimmed = String(number || '').trim();
-    const numValid = /^[0-9A-Za-z_-]+$/.test(numTrimmed);
-    if (!numTrimmed || !numValid) {
-      setError('Provide a valid account number');
+    const numTrimmed = sanitizeString(number);
+    if (!isValidAccountNumber(numTrimmed)) {
+      setError(ERROR_MESSAGES.INVALID_ACCOUNT_NUMBER);
       setResult(null);
       return;
     }
     try {
+      setLoading((l) => ({ ...l, inquire: true }));
+      setError(null);
       const { data } = await inquireAccount(number);
       setResult(data);
-      setError(null);
     } catch (err) {
-      setError(err.response?.data || 'Error inquiring account');
+      setError(getErrorMessage(err) || ERROR_MESSAGES.INQUIRE_ACCOUNT_ERROR);
       setResult(null);
+    } finally {
+      setLoading((l) => ({ ...l, inquire: false }));
     }
   };
 
   const onDeposit = async (e) => {
     e.preventDefault();
-    setValidated((v) => ({ ...v, amount: true }));
-    const numTrimmed = String(number || '').trim();
-    const numValid = /^[0-9A-Za-z_-]+$/.test(numTrimmed);
-    const amountNum = Number(amount);
-    if (!numTrimmed || !numValid || !isFinite(amountNum) || amountNum <= 0) {
+    setValidated((v) => ({ ...v, deposit: true }));
+    const numTrimmed = sanitizeString(number);
+    const amountNum = Number(depositAmount);
+    if (!isValidAccountNumber(numTrimmed) || !isValidAmount(amountNum)) {
       setError('Provide a valid account number and a positive amount');
       setResult(null);
       return;
     }
     try {
-      const { data } = await deposit({ number, amount });
-      setResult(data);
+      setLoading((l) => ({ ...l, deposit: true }));
       setError(null);
+      const { data } = await deposit({ number, amount: depositAmount });
+      setResult(data);
+      setDepositAmount('');
+      setValidated((v) => ({ ...v, deposit: false }));
     } catch (err) {
-      setError(err.response?.data || 'Error depositing');
+      setError(getErrorMessage(err) || ERROR_MESSAGES.DEPOSIT_ERROR);
       setResult(null);
+    } finally {
+      setLoading((l) => ({ ...l, deposit: false }));
     }
   };
 
   const onWithdraw = async (e) => {
     e.preventDefault();
-    setValidated((v) => ({ ...v, amount: true }));
-    const numTrimmed = String(number || '').trim();
-    const numValid = /^[0-9A-Za-z_-]+$/.test(numTrimmed);
-    const amountNum = Number(amount);
-    if (!numTrimmed || !numValid || !isFinite(amountNum) || amountNum <= 0) {
+    setValidated((v) => ({ ...v, withdraw: true }));
+    const numTrimmed = sanitizeString(number);
+    const amountNum = Number(withdrawAmount);
+    if (!isValidAccountNumber(numTrimmed) || !isValidAmount(amountNum)) {
       setError('Provide a valid account number and a positive amount');
       setResult(null);
       return;
     }
     try {
-      const { data } = await withdraw({ number, amount });
-      setResult(data);
+      setLoading((l) => ({ ...l, withdraw: true }));
       setError(null);
+      const { data } = await withdraw({ number, amount: withdrawAmount });
+      setResult(data);
+      setWithdrawAmount('');
+      setValidated((v) => ({ ...v, withdraw: false }));
     } catch (err) {
-      setError(err.response?.data || 'Error withdrawing');
+      setError(getErrorMessage(err) || ERROR_MESSAGES.WITHDRAW_ERROR);
       setResult(null);
+    } finally {
+      setLoading((l) => ({ ...l, withdraw: false }));
     }
   };
 
@@ -97,23 +117,30 @@ function Account() {
     e.preventDefault();
     const targetNumber = closeNumber || number;
     setValidated((v) => ({ ...v, close: true }));
-    const numTrimmed = String(targetNumber || '').trim();
-    const numValid = /^[0-9A-Za-z_-]+$/.test(numTrimmed);
-    if (!numTrimmed || !numValid) {
-      setError('Provide a valid account number');
+    const numTrimmed = sanitizeString(targetNumber);
+    if (!isValidAccountNumber(numTrimmed)) {
+      setError(ERROR_MESSAGES.INVALID_ACCOUNT_NUMBER);
       setResult(null);
       return;
     }
-    if (!targetNumber) return;
-    const confirmClose = window.confirm(`Close account #${targetNumber}? This action cannot be undone.`);
-    if (!confirmClose) return;
+    // Confirmation dialog to prevent accidental account closure
+    const confirmClose = window.confirm(`Are you sure you want to close account ${targetNumber}? This action cannot be undone.`);
+    if (!confirmClose) {
+      setValidated((v) => ({ ...v, close: false }));
+      return;
+    }
     try {
+      setLoading((l) => ({ ...l, close: true }));
+      setError(null);
       const { data } = await closeAccount(targetNumber);
       setResult(data);
-      setError(null);
+      setCloseNumber('');
+      setNumber('');
     } catch (err) {
-      setError(err.response?.data || 'Error closing account');
+      setError(getErrorMessage(err) || ERROR_MESSAGES.CLOSE_ACCOUNT_ERROR);
       setResult(null);
+    } finally {
+      setLoading((l) => ({ ...l, close: false }));
     }
   };
 
@@ -134,10 +161,11 @@ function Account() {
                     value={createForm.customerId}
                     onChange={(e) => setCreateForm({ ...createForm, customerId: e.target.value })}
                     required
-                    isInvalid={validated.create && !String(createForm.customerId || '').trim()}
+                    isInvalid={validated.create && !isRequired(sanitizeString(createForm.customerId))}
+                    disabled={loading.create}
                   />
                   <Form.Control.Feedback type="invalid">
-                    Enter a valid customer ID like CUST-2025-000001.
+                    Enter a valid customer ID.
                   </Form.Control.Feedback>
                 </FloatingLabel>
               </Col>
@@ -147,19 +175,18 @@ function Account() {
                     value={createForm.type}
                     onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
                     required
-                    isInvalid={validated.create && !String(createForm.type || '').trim()}
+                    disabled={loading.create}
                   >
-                    <option value="SAVINGS">SAVINGS</option>
-                    <option value="CURRENT">CURRENT</option>
+                    <option value={ACCOUNT_TYPES.SAVINGS}>{ACCOUNT_TYPES.SAVINGS}</option>
+                    <option value={ACCOUNT_TYPES.CURRENT}>{ACCOUNT_TYPES.CURRENT}</option>
                   </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    Select an account type.
-                  </Form.Control.Feedback>
                 </FloatingLabel>
               </Col>
             </Row>
             <div className="mt-3">
-              <Button type="submit">Create</Button>
+              <Button type="submit" disabled={loading.create}>
+                {loading.create ? 'Creating...' : 'Create'}
+              </Button>
             </div>
           </Form>
         </Card.Body>
@@ -174,12 +201,12 @@ function Account() {
                 <FloatingLabel controlId="accountNumber" label="Account Number">
                   <Form.Control
                     type="text"
-                    placeholder="ACCT1001"
+                    placeholder="MAY-001-20-00000001"
                     value={number}
                     onChange={(e) => setNumber(e.target.value)}
                     required
-                    pattern="[0-9A-Za-z_-]+"
-                    isInvalid={validated.inquire && (!String(number || '').trim() || !/^[0-9A-Za-z_-]+$/.test(String(number || '').trim()))}
+                    isInvalid={validated.inquire && !isValidAccountNumber(sanitizeString(number))}
+                    disabled={loading.inquire}
                   />
                   <Form.Control.Feedback type="invalid">
                     Enter a valid account number.
@@ -187,32 +214,87 @@ function Account() {
                 </FloatingLabel>
               </Col>
               <Col md="auto">
-                <Button type="submit" className="me-2">Inquire</Button>
+                <Button type="submit" disabled={loading.inquire}>
+                  {loading.inquire ? 'Inquiring...' : 'Inquire'}
+                </Button>
               </Col>
             </Row>
           </Form>
-          <Form className="mb-2" noValidate validated={validated.amount} onSubmit={onDeposit}>
+          <Form className="mb-3" noValidate validated={validated.deposit} onSubmit={onDeposit}>
             <Row className="g-3 align-items-end">
-              <Col md={6}>
-                <FloatingLabel controlId="amount" label="Amount">
+              <Col md={4}>
+                <FloatingLabel controlId="depositAccountNumber" label="Account Number">
+                  <Form.Control
+                    type="text"
+                    placeholder="Account Number"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    required
+                    disabled={loading.deposit}
+                  />
+                </FloatingLabel>
+              </Col>
+              <Col md={4}>
+                <FloatingLabel controlId="depositAmount" label="Amount">
                   <Form.Control
                     type="number"
-                    placeholder="100"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                    min="0.01"
                     step="0.01"
-                    isInvalid={validated.amount && (!(Number(amount) > 0))}
+                    min="0.01"
+                    placeholder="0.00"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    required
+                    isInvalid={validated.deposit && !isValidAmount(Number(depositAmount))}
+                    disabled={loading.deposit}
                   />
                   <Form.Control.Feedback type="invalid">
-                    Enter a positive amount.
+                    Enter a valid positive amount.
                   </Form.Control.Feedback>
                 </FloatingLabel>
               </Col>
               <Col md="auto">
-                <Button type="submit" className="me-2">Deposit</Button>
-                <Button variant="warning" onClick={onWithdraw}>Withdraw</Button>
+                <Button type="submit" variant="success" disabled={loading.deposit}>
+                  {loading.deposit ? 'Depositing...' : 'Deposit'}
+                </Button>
+              </Col>
+            </Row>
+          </Form>
+          <Form className="mb-2" noValidate validated={validated.withdraw} onSubmit={onWithdraw}>
+            <Row className="g-3 align-items-end">
+              <Col md={4}>
+                <FloatingLabel controlId="withdrawAccountNumber" label="Account Number">
+                  <Form.Control
+                    type="text"
+                    placeholder="Account Number"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    required
+                    disabled={loading.withdraw}
+                  />
+                </FloatingLabel>
+              </Col>
+              <Col md={4}>
+                <FloatingLabel controlId="withdrawAmount" label="Amount">
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0.00"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    required
+                    isInvalid={validated.withdraw && !isValidAmount(Number(withdrawAmount))}
+                    disabled={loading.withdraw}
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    Enter a valid positive amount.
+                  </Form.Control.Feedback>
+                </FloatingLabel>
+              </Col>
+              <Col md="auto">
+                <Button type="submit" variant="warning" disabled={loading.withdraw}>
+                  {loading.withdraw ? 'Withdrawing...' : 'Withdraw'}
+                </Button>
               </Col>
             </Row>
           </Form>
@@ -228,12 +310,12 @@ function Account() {
                 <FloatingLabel controlId="closeAccountNumber" label="Account Number">
                   <Form.Control
                     type="text"
-                    placeholder="ACCT1001"
+                    placeholder="MAY-001-20-00000001"
                     value={closeNumber}
                     onChange={(e) => setCloseNumber(e.target.value)}
                     required
-                    pattern="[0-9A-Za-z_-]+"
-                    isInvalid={validated.close && (!String(closeNumber || '').trim() || !/^[0-9A-Za-z_-]+$/.test(String(closeNumber || '').trim()))}
+                    isInvalid={validated.close && !isValidAccountNumber(sanitizeString(closeNumber))}
+                    disabled={loading.close}
                   />
                   <Form.Control.Feedback type="invalid">
                     Enter a valid account number.
@@ -241,7 +323,9 @@ function Account() {
                 </FloatingLabel>
               </Col>
               <Col md="auto">
-                <Button variant="secondary" type="submit">Close</Button>
+                <Button variant="secondary" type="submit" disabled={loading.close}>
+                  {loading.close ? 'Closing...' : 'Close'}
+                </Button>
               </Col>
             </Row>
           </Form>

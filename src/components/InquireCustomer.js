@@ -1,29 +1,36 @@
 import React, { useState } from 'react';
 import { getCustomer } from '../services/customerApi';
 import { Form, Button, Alert, Card, FloatingLabel } from 'react-bootstrap';
+import { isValidCustomerId, sanitizeString } from '../utils/validation';
+import { getErrorMessage } from '../utils/errorHandler';
+import { ERROR_MESSAGES } from '../constants';
 
 function InquireCustomer() {
   const [id, setId] = useState('');
   const [customer, setCustomer] = useState(null);
   const [error, setError] = useState(null);
   const [validated, setValidated] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const idTrimmed = id.trim();
+    const idTrimmed = sanitizeString(id);
     setValidated(true);
-    if (!idTrimmed) {
-      setError('Customer ID is required');
+    if (!isValidCustomerId(idTrimmed)) {
+      setError(ERROR_MESSAGES.INVALID_CUSTOMER_ID);
       setCustomer(null);
       return;
     }
     try {
+      setLoading(true);
+      setError(null);
       const response = await getCustomer(idTrimmed);
       setCustomer(response.data);
-      setError(null);
     } catch (err) {
-      setError(err.response?.data || 'Error inquiring customer');
+      setError(getErrorMessage(err) || ERROR_MESSAGES.INQUIRE_CUSTOMER_ERROR);
       setCustomer(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,7 +51,9 @@ function InquireCustomer() {
             Please enter a valid customer ID like CUST-2025-000001.
           </Form.Control.Feedback>
         </FloatingLabel>
-        <Button type="submit">Inquire</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? 'Inquiring...' : 'Inquire'}
+        </Button>
       </Form>
       {customer && (
         <Card className="mt-3">
@@ -55,7 +64,7 @@ function InquireCustomer() {
           </Card.Body>
         </Card>
       )}
-      {error && <Alert variant="danger">{error}</Alert>}
+      {error && <Alert variant="danger" role="alert" aria-live="assertive">{error}</Alert>}
     </div>
   );
 }

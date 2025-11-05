@@ -21,3 +21,6 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Code quality review documentation
+CODE_QUALITY_REVIEW.md

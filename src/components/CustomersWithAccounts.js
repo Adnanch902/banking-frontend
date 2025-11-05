@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Accordion, Card, Alert, Spinner, Table, Badge } from 'react-bootstrap';
+import { Accordion, Card, Alert, Table, Badge } from 'react-bootstrap';
 import { getAllCustomersWithAccounts } from '../services/customerApi';
+import { getErrorMessage } from '../utils/errorHandler';
+import { formatCurrency } from '../utils/formatters';
+import { ERROR_MESSAGES } from '../constants';
+import Loading from './Loading';
+import EmptyState from './EmptyState';
 
 function CustomersWithAccounts() {
   const [customers, setCustomers] = useState([]);
@@ -18,7 +23,7 @@ function CustomersWithAccounts() {
         }
       } catch (err) {
         if (mounted) {
-          setError(err.response?.data || 'Failed to load customers');
+          setError(getErrorMessage(err) || ERROR_MESSAGES.LOAD_CUSTOMERS_ERROR);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -28,12 +33,7 @@ function CustomersWithAccounts() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="d-flex align-items-center gap-2">
-        <Spinner animation="border" size="sm" />
-        <span>Loading customers…</span>
-      </div>
-    );
+    return <Loading message="Loading customers…" />;
   }
 
   if (error) {
@@ -44,7 +44,10 @@ function CustomersWithAccounts() {
     <div>
       <h2 className="mb-3">Customers & Accounts</h2>
       {customers.length === 0 ? (
-        <Alert variant="info" className="mb-0">No customers found.</Alert>
+        <EmptyState
+          title="No customers found"
+          message="There are no customers in the system yet. Create a customer to get started."
+        />
       ) : (
         <Accordion alwaysOpen>
           {customers.map((c, idx) => (
@@ -74,7 +77,7 @@ function CustomersWithAccounts() {
                               <td>{a.accountNumber}</td>
                               <td>{a.accountType}</td>
                               <td>{a.status}</td>
-                              <td className="text-end">{a.balance}</td>
+                              <td className="text-end">{formatCurrency(a.balance)}</td>
                             </tr>
                           ))}
                         </tbody>
